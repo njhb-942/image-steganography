@@ -1,9 +1,5 @@
 import os
-
-import numpy as np
 from PIL import Image
 
-im = Image.open('用于隐藏水印的灰度图片.jpeg')
-img = np.array(im)
-
-Image.fromarray(np.array(img, dtype='uint8')).convert(mode='L').save('用于隐藏水印的灰度图片.png')
+Image.open('out/2.jpeg').resize((4000, 3000)).save('out/2.png')
+os.remove('out/2.jpeg')

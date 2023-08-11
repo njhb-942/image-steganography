@@ -1,33 +1,9 @@
-import numpy as np
 import qrcode  # 加载二维码生成库
 from pylab import *
 import os
 from PIL import Image
 import shutil
 import decoder
-import change
-import restore
-
-def arnold_encode(image, shuffle_times, a, b):
-    # 1:创建新图像
-    arnold_image = np.zeros(shape=image.shape)
-
-    # 2：计算N
-    h, w = image.shape[0], image.shape[1]
-    N = h  # 或N=w
-
-    # 3：遍历像素坐标变换
-    for time in range(shuffle_times):
-        for ori_x in range(h):
-            for ori_y in range(w):
-                # 按照公式坐标变换
-                new_x = (1 * ori_x + b * ori_y) % N
-                new_y = (a * ori_x + (a * b + 1) * ori_y) % N
-
-                arnold_image[new_x, new_y] = image[ori_x, ori_y]
-
-    return arnold_image
-
 
 def ReadFile(file_path):
     """
@@ -109,9 +85,6 @@ def MakeQrcode(original_fileName, limit_length, size):
             # img = qr.make_image() # 使用make方法生成二维码，第一个参数是要存储的数据，可以是字符串等类型
             # img.save(f'qr{count}.png')  # 这一部分的内容可以单独提取出来做成一个path
             img = np.array(qr.make_image().get_image().resize((size, size)), dtype='uint8') * 255
-            # h_index = change.reorder_index(np.arange(0, img.shape[0])).tolist()
-            # for i in range(0, img.shape[0]):
-            #     img[i] = img[i][h_index]
             # ImageList.append(f'{ImageName}{count}.png')
             count += 1
             ImageList.append(img)
@@ -134,8 +107,8 @@ def compress_image(img_path, out_path, mb=74, step=1, quality=100):
     :return: 压缩文件地址，压缩文件大小
     """
     o_size = get_size(img_path)
-    if o_size <= mb:
-        return -1
+    if o_size < mb:
+        return Image.open(img_path)
 
     img = Image.open(img_path)
 
@@ -148,9 +121,8 @@ def compress_image(img_path, out_path, mb=74, step=1, quality=100):
         quality -= step
         o_size = get_size(out_path)
 
-    os.remove(img_path)
     print('压缩后文件大小(kb): ' + str(o_size))
-    return quality
+    return img
 
 def getEncodeImg(image_list, img0, change, kb):
     count = 1
@@ -171,10 +143,7 @@ def getEncodeImg(image_list, img0, change, kb):
     img0 = np.array(Image.open(img0), dtype='uint8')
 
     for index, QR0 in enumerate(image_list):
-        if count == 1:
-            Image.fromarray(np.array(QR0, dtype='uint8')).convert(mode='L').save('加密前1.png')
         QR0 = np.array(np.where(QR0 == 0, change, 0), dtype='uint8')
-        # QR0 = np.array(arnold_encode(QR0, 4, 1, 1), dtype='uint8')
         img0_af = np.where(img0 > threshold, img0 - change, img0)
         # 加密
         QR0_length = QR0.shape[0]
@@ -182,45 +151,45 @@ def getEncodeImg(image_list, img0, change, kb):
         l = img0.shape[1]
         img0_af[:QR0_length, :QR0_length] += QR0
         # 补充剩余部分噪声背景
-        rdm_index = np.random.permutation(l - QR0.shape[0])
-        img0_af[:h, QR0_length:l] += QR0[:, rdm_index]
+        rdm_index = np.random.permutation(l - QR0.shape[0] + 15)
+        img0_af[:h, QR0_length - 15:l] += QR0[:, rdm_index]
         # 写回加密后的图片
         # cv2.imwrite('加密后未压缩.jpeg', np.array(img0_af, dtype='uint8'), (cv2.IMWRITE_JPEG_QUALITY, 100))
         Image.fromarray(np.array(img0_af, dtype='uint8')).convert(mode='L').save(f'{out_path}/加密后未压缩{count}.jpeg', quality=100)
         # Image.fromarray(np.array(img0_af)).save("test01.png")
-        quality = compress_image(f'{out_path}/加密后未压缩{count}.jpeg', f'{out_path}/{count}.jpeg', mb=kb)
-        if quality != -1:
-            os.remove(f'{out_path}/{count}.jpeg')
-            Image.fromarray(np.array(img0_af, dtype='uint8')).convert(mode='L').save(f'{out_path}/{count}.jpeg', quality=quality)
+        compress_image(f'{out_path}/加密后未压缩{count}.jpeg', f'{out_path}/{count}.jpeg', mb=kb)
         print("压缩后的文件名："+f'{out_path}/{count}.jpeg')
         print('=========')
+        os.remove(f'{out_path}/加密后未压缩{count}.jpeg')
         count += 1
 
-if __name__ == '__main__':
+def main(original_fileName,change):
     # 读取原图片以及其像素大小、磁盘大小
     img0 = '用于隐藏水印的灰度图片.jpeg'
-    img0_kb = get_size(img0) * 1.05
+    img0_kb = get_size(img0) * 1.04
     h = np.array(Image.open(img0), dtype='uint8').shape[0]
     l = np.array(Image.open(img0), dtype='uint8').shape[1]
     size = np.where(h > l, l, h)
 
     # 读取要加密的文件
-    original_fileName = 'secret.py'
+    # original_fileName = 'secret.py'
 
     # 设置单个二维码存储最大字符，并生成对应二维码列表
     limit_length = 1000
     image_list = MakeQrcode(original_fileName, limit_length, size)
 
     # 设置隐写程度超参数，并生成加密后的图片
-    change = 3
+    change = int(change)
+    # change = 3
     getEncodeImg(image_list, img0, change, img0_kb)
     # print(image_list)
 
     # 查看本次加密后是否能完整读出信息
-    decoder.decode('out')
+    # decoder.decode('out')
     print("加密成功！！")
-    os.remove(f'out/{original_fileName}')
-
+    # os.remove(f'out/{original_fileName}')
+if __name__ == '__main__':
+    main("secret.py",1)
 
 
 

@@ -101,7 +101,8 @@ def decode(out_path):
     # 用二维码矩阵列表解密并整合成完整文件
     WriteToOriginFile(out)
 
-if __name__ == '__main__':
+def main():
     # 指定加密后包含加密后图片的文件夹
+    print("开始解密！！")
     decode('out')
     print("解密成功！！")

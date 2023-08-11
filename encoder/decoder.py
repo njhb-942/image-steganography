@@ -2,34 +2,7 @@ import cv2
 import numpy as np
 import os
 from PIL import Image
-import restore
-import change
-import ArnoldChange
 
-def arnold_decode(image, shuffle_times, a, b):
-    """ decode for rgb image that encoded by Arnold
-    Args:
-        image: rgb image encoded by Arnold
-        shuffle_times: how many times to shuffle
-    Returns:
-        decode image
-    """
-    # 1:创建新图像
-    decode_image = np.zeros(shape=image.shape)
-
-    # 2：计算N
-    h, w = image.shape[0], image.shape[1]
-    N = h  # 或N=w
-
-    # 3：遍历像素坐标变换
-    for time in range(shuffle_times):
-        for ori_x in range(h):
-            for ori_y in range(w):
-                # 按照公式坐标变换
-                new_x = ((a * b + 1) * ori_x + (-b) * ori_y) % N
-                new_y = ((-a) * ori_x + ori_y) % N
-                decode_image[new_x, new_y] = image[ori_x, ori_y]
-    return decode_image
 
 def Decoder(img):
     """
@@ -51,10 +24,6 @@ def GetContentList(imageList):
     """
     contentList = []
     for img in imageList:
-        # img = np.array(ArnoldChange.arnold_decode(img, 4, 1, 1), dtype='uint8')
-        # h_index = restore.recover_index(np.arange(0, img.shape[0])).tolist()
-        # for i in range(0, img.shape[0]):
-        #     img[i] = img[i][h_index]
         content = Decoder(img)
         contents = content[0].split('\n')
         contentList.append(contents)
@@ -69,7 +38,7 @@ def WriteToOriginFile(imageList):
     """
     contentList = GetContentList(imageList)
     # 排序, 以每个二维码最后一行的数字进行排序
-    contentList.sort(key= lambda contentList:int(contentList[len(contentList)-1]), reverse=False)
+    contentList.sort(key= lambda contentList:contentList[len(contentList)-1], reverse=False)
     fileName = contentList[len(contentList) - 1][-2]  # 获取文件名——最后一个二维码信息中的倒数第二行的内容
     file = open(f'out/{fileName}', 'w')
     # 这里的逻辑是：contentList中包含已经按照信息中隐藏的数据，排好序的数据集合(其大小为二维码的数量)
@@ -112,16 +81,17 @@ def decode(out_path):
     ys = imgs[0]
     jmh = imgs[1:]
     QR0_length = np.min(ys.shape)
-    jmh = np.array(jmh)
 
     # 解密后的波动
     # qr = jmh - np.where(ys > threshold, ys - change, ys) + change
 
     # 解密成矩阵
-    qr = ys[:QR0_length, :QR0_length] - jmh[:, :QR0_length, :QR0_length]
+    qr = ys - jmh
     change = np.mean(qr) * 2
     out = np.where(qr < (change * 0.5), 0, 255)
-    Image.fromarray(np.array(out[0], dtype='uint8')).convert(mode='L').save('解密后1.png')
+    out[:, :, QR0_length-15:] = 255
+    out = out[:, :QR0_length, :QR0_length]
+
     # cv2.imwrite('out1.png', out[0, :, :])
     # cv2.imwrite('out2.png', out[1, :, :])
     # cv2.imwrite('out3.png', out[2, :, :])
